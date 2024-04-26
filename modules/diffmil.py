@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from .swin import SwinEncoder
 from utils import ema_update 
 import torchvision.models as models
 from utils import ema_update 
@@ -42,94 +41,6 @@ def initialize_weights(module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-
-class MeanMIL(nn.Module):
-    def __init__(self,n_classes=1,dropout=True,act='relu',init=False,init_pt=None, test=False,input_dim=1024):
-        super(MeanMIL, self).__init__()
-
-        head = [nn.Linear(input_dim,512)]
-
-        if act.lower() == 'relu':
-            head += [nn.ReLU()]
-        elif act.lower() == 'gelu':
-            head += [nn.GELU()]
-
-        if dropout:
-            head += [nn.Dropout(0.25)]
-            
-        #head += [SwinEncoder(attn='swin',pool='none')]
-        #head += [ASPP(28,512,embed_dim=128)]
-        head += [nn.Linear(512,n_classes)]
-        
-        self.head = nn.Sequential(*head)
-
-
-        # self.head = nn.Sequential(
-        #     nn.Linear(1024,512),
-        #     nn.ReLU(),
-        #     nn.Dropout(0.25),
-        #     nn.Linear(512,n_classes)
-        # )
-
-        if test:
-            self._test = nn.Linear(1024, 512)
-        if init:
-            pre_dict = torch.load(init_pt)
-            new_state_dict ={}
-            target = ['head.0.weight','head.0.bias']
-            for k,v in pre_dict.items():
-                if k in target:
-                    new_state_dict[k.split('.',1)[1]]=v
-                    print(k)
-            self.head.load_state_dict(new_state_dict,strict=False)
-            print('embedding fc Inited')
-        else:
-            self.apply(initialize_weights)
-
-    def forward(self,x):
-
-        x = self.head(x).mean(axis=1)
-        return x
-
-
-
-class MaxMIL(nn.Module):
-    def __init__(self,n_classes=1,dropout=True,act='relu',init=False,init_pt=None, test=False,input_dim=1024):
-        super(MaxMIL, self).__init__()
-
-        #head = [nn.Linear(192,192)]
-
-        head = [nn.Linear(input_dim,512)]
-
-        if act.lower() == 'relu':
-            head += [nn.ReLU()]
-        elif act.lower() == 'gelu':
-            head += [nn.GELU()]
-
-        if dropout:
-            head += [nn.Dropout(0.25)]
-        #head += [SwinEncoder(attn='swin',pool='none',trans_conv=True)]
-        #head += [nn.Linear(192,n_classes)]
-        head += [nn.Linear(512,n_classes)]
-        self.head = nn.Sequential(*head)
-
-        if test:
-            self._test = nn.Linear(1024, 512)
-        if init:
-            pre_dict = torch.load(init_pt)
-            new_state_dict ={}
-            target = ['head.0.weight','head.0.bias']
-            for k,v in pre_dict.items():
-                if k in target:
-                    new_state_dict[k.split('.',1)[1]]=v
-            self.head.load_state_dict(new_state_dict,strict=False)
-            print('embedding fc Inited')
-        else:
-            self.apply(initialize_weights)
-
-    def forward(self,x):
-        x,_ = self.head(x).max(axis=1)
-        return x
 
 class FCLayer(nn.Module):
     def __init__(self, dropout=0.25,act='relu',in_size=1024):
@@ -185,7 +96,7 @@ class DAttention(nn.Module):
     
 
 class DAttentionWithDiff(nn.Module):
-    def __init__(self,out_dim=2,k_ratio=0.1,t_steps=2,n_robust=0,ifTrain=1,ifrand=0):
+    def __init__(self,out_dim=2,k_ratio=0.1,t_steps=2,ifTrain=1,ifrand=0):
         super(DAttentionWithDiff, self).__init__()
         self.embedding = FCLayer()
         self.L = 512
@@ -353,7 +264,7 @@ class DAttentionWithDiff(nn.Module):
 
 
 class DAttentionWithRandomAbandon(nn.Module): #这个是跑对比试验用的，看看随即丢弃的效果如何
-    def __init__(self,out_dim=2,k_ratio=0.1,t_steps=2,n_robust=0,ifTrain=1,ifrand=0):
+    def __init__(self,out_dim=2,k_ratio=0.1,t_steps=2,ifTrain=1,ifrand=0):
         super(DAttentionWithRandomAbandon, self).__init__()
         self.embedding = FCLayer()
         self.L = 512
@@ -424,7 +335,180 @@ class DAttentionWithRandomAbandon(nn.Module): #这个是跑对比试验用的，
 
         return x
     
+class DAttentionWithDiffUsingNet(nn.Module):
+    def __init__(self,out_dim=2,k_ratio=0.1,t_steps=2,n_robust=0,ifTrain=1,ifrand=0,ifEma=0,ifType=1):
+        super(DAttentionWithDiffUsingNet, self).__init__()
+        self.L = 1024
+        self.D = 128
+        self.K = 1
+        self.k_ratio= k_ratio
+        self.t_steps= t_steps
+        self.ifTrain= ifTrain
+        self.ifrand = ifrand
+        self.ifEma = ifEma
+        self.ifType= ifType
+        
+        self.attention = nn.Sequential(
+            nn.Linear(self.L, self.D,bias=False),
+            # nn.GELU(),
+            nn.Tanh(),
+            nn.Linear(self.D, self.K,bias=False)
+        )
 
+
+        self.head = nn.Linear(1024,out_dim)
+        self.Dit= DiT_models["DiT-XL/2"](input_size=32)
+        ckpt_path = "/home/shihuazhan/DiT/DiT/pretrained_models/DiT-XL-2-256x256.pt"
+        #ckpt_path = "/data/zhangxiaoxian/output/pretrained_models/DiT-XL-2-256x256.pt"
+        state_dict = find_model(ckpt_path)
+        self.Dit.load_state_dict(state_dict)
+        self.Dit.eval()
+
+    # def updateEma(self,a):
+    #     self.attention_ema -= (1 - a) * (self.attention_ema - self.attention.weight.data)
+
+    def choseInstanceByValue(self,x,attention,score,value):
+        
+        if value==1: #max attention
+            max_att = attention.argmax()
+            index=max_att
+            a=x[max_att]
+        elif value==2: #min attention
+            min_att = attention.argmin()
+            index=min_att
+            a=x[min_att]
+        elif value==3: #max score 0
+            max_sco0 = score[:, 0].argmax()
+            a=x[max_sco0]
+            index=max_sco0
+        elif value==4: #min score 0
+            min_sco0 = score[:, 0].argmin()
+            a=x[min_sco0]
+            index=min_sco0
+        elif value==5: #max score 1
+            max_sco1 = score[:, 1].argmax()
+            a=x[max_sco1]
+            index=max_sco1
+        elif value==6: #min score 1          
+            min_sco1 = score[:, 1].argmin()
+            a=x[min_sco1]
+            index=min_sco1
+
+        # print(index)
+        return a
+
+    @torch.no_grad()
+    def Diffusion_reembed_shareWeights(self,x): #实现思路：用abmil来合成一个当作输入diffusion的特征，然后生成特征当锚点
+        
+        A = self.attention(x)
+
+        x = x.squeeze() #(n,1024)
+        
+        A = torch.transpose(A, -1, -2)  # KxN
+        A = F.softmax(A, dim=-1)  # softmax over N
+        A = torch.matmul(A,x)
+        diffusion = create_diffusion(str(self.t_steps))
+
+        A = A.view(1, 32, 32)
+        A = A.unsqueeze(1)
+        A = A.repeat(1, 4, 1, 1)
+        z = torch.randn(1, 4, 32, 32, device=A.device) #shz 4.26
+        print(z)
+        A = A+z
+        # print(A.shape)
+        # print("**")
+        samples = diffusion.p_sample_loop(
+        self.Dit.forward_unconditional_for_wsi2,A.shape,A,clip_denoised=False, progress=True,device=A.device)
+        new_shape = (1, 4, 1024)
+        samples=samples.view(new_shape)
+        samples = samples.mean(dim=1) #(1,1024)
+        return samples
+    
+
+    @torch.no_grad()
+    def Diffusion_reembed_ChoseScoreMax(self,x): #实现思路：用abmil的head来对特征打分，选择得分最高的特征当锚点
+        if self.ifEma==0:
+            A = self.attention(x)
+        else:
+            print("UsingEma,但是呢,我不知道ema怎么实现,这就很糟糕")
+
+        x = x.squeeze() #(n,1024)
+        
+        A = torch.transpose(A, -1, -2)  # KxN
+        attentionScore = F.softmax(A, dim=-1)  # softmax over N
+        ascore=attentionScore.squeeze(0)
+        ascore=ascore.squeeze(0) # n
+        A = torch.matmul(attentionScore,x) 
+        scores = self.head(x) # n,2
+        A = self.choseInstanceByValue(x,ascore,scores,self.ifType)
+        A = A.view(1, 32, 32)
+        A=A.unsqueeze(1)
+        A=A.repeat(1, 4, 1, 1)
+        z = torch.randn(1, 4, 32, 32, device=A.device) #shz 4.26
+        A=A+z #shz 4.26
+        diffusion = create_diffusion(str(self.t_steps))
+        samples = diffusion.p_sample_loop(
+        self.Dit.forward_unconditional_for_wsi2,A.shape,A,clip_denoised=False, progress=True,device=A.device)
+        new_shape = (1, 4, 1024)
+        samples=samples.view(new_shape)
+        samples = samples.mean(dim=1) #(1,1024)
+        return samples
+
+
+    def forward(self, x):
+        if self.training:
+            if self.ifrand == 0:
+                #a = self.Diffusion_reembed_shareWeights(x)
+                a =self.Diffusion_reembed_ChoseScoreMax(x)
+            else:
+                print("Something Wrong")
+            x = x.squeeze()
+            b = x
+            cosine_similarity = F.cosine_similarity(a.expand_as(b), b, dim=1)
+            sorted_indices = torch.argsort(cosine_similarity, dim=0) #low
+            # sorted_indices = torch.argsort(cosine_similarity, dim=0, descending=True)  #high
+            k = self.k_ratio
+            num_elements = int(torch.tensor(b.size(0)) * k)
+            lowest_k_indices = sorted_indices[:num_elements]
+            result = b[lowest_k_indices]
+            # boundary_similarity = cosine_similarity[sorted_indices[num_elements]]
+            x = result.view(-1, 1024)
+            # b,p,n = x.size()
+            A = self.attention(x)
+            A = torch.transpose(A, -1, -2)  # KxN
+            A = F.softmax(A, dim=-1)  # softmax over N
+            x = torch.matmul(A,x)
+            x = self.head(x.squeeze(1))
+        else:
+            if self.ifTrain == 1:
+                # b,p,n = x.size()
+                A = self.attention(x)
+                A = torch.transpose(A, -1, -2)  # KxN
+                A = F.softmax(A, dim=-1)  # softmax over N
+                x = torch.matmul(A,x)
+                x = self.head(x.squeeze(1))
+            else:
+                if self.ifrand == 0:
+                    a = self.Diffusion_reembed_ChoseScoreMax(x)
+                else:
+                    print("Wrong")       
+                x = x.squeeze()
+                b = x
+                cosine_similarity = F.cosine_similarity(a.expand_as(b), b, dim=1)
+                sorted_indices = torch.argsort(cosine_similarity, dim=0)
+                k = self.k_ratio
+                num_elements = int(torch.tensor(b.size(0)) * k)
+                lowest_k_indices = sorted_indices[:num_elements]
+                result = b[lowest_k_indices]
+                x = result.view(-1, 1024)
+                # b,p,n = x.size()
+                A = self.attention(x)
+                A = torch.transpose(A, -1, -2)  # KxN
+                A = F.softmax(A, dim=-1)  # softmax over N
+                x = torch.matmul(A,x)
+                x = self.head(x.squeeze(1))
+
+        return x
 
 if __name__ == "__main__":
     model = DAttention()
