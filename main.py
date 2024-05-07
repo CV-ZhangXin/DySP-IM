@@ -172,6 +172,8 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
         model = diffmil.DAttentionWithDiff(out_dim=args.n_classes,k_ratio=args.k_ratio,t_steps=args.t_steps,ifrand=args.ifrand,ifTrain=args.ifTrain).to(device) 
     elif args.model == 'random':
         model = diffmil.DAttentionWithRandomAbandon(out_dim=args.n_classes,k_ratio=args.k_ratio,t_steps=args.t_steps,ifrand=args.ifrand,ifTrain=args.ifTrain).to(device)           
+    elif args.model == 'chose':
+        model = diffmil. DAttentionWithDiffchose(out_dim=args.n_classes,k_ratio=args.k_ratio,t_steps=args.t_steps,ifrand=args.ifrand,ifTrain=args.ifTrain).to(device)           
     elif args.model == 'pure':
         model = mhim.MHIM(select_mask=False,n_classes=args.n_classes,act=args.act,head=args.n_heads,da_act=args.da_act,baseline=args.baseline).to(device)
     elif args.model == 'attmil':

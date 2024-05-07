@@ -335,10 +335,11 @@ class DAttentionWithRandomAbandon(nn.Module): #这个是跑对比试验用的，
 
         return x
     
-class DAttentionWithDiffUsingNet(nn.Module):
+class DAttentionWithDiffchose(nn.Module):
     def __init__(self,out_dim=2,k_ratio=0.1,t_steps=2,n_robust=0,ifTrain=1,ifrand=0,ifEma=0,ifType=1):
-        super(DAttentionWithDiffUsingNet, self).__init__()
-        self.L = 1024
+        super(DAttentionWithDiffchose, self).__init__()
+        self.embedding = FCLayer()
+        self.L = 512
         self.D = 128
         self.K = 1
         self.k_ratio= k_ratio
@@ -356,7 +357,7 @@ class DAttentionWithDiffUsingNet(nn.Module):
         )
 
 
-        self.head = nn.Linear(1024,out_dim)
+        self.head = nn.Linear(512,out_dim)
         self.Dit= DiT_models["DiT-XL/2"](input_size=32)
         ckpt_path = "/home/shihuazhan/DiT/DiT/pretrained_models/DiT-XL-2-256x256.pt"
         #ckpt_path = "/data/zhangxiaoxian/output/pretrained_models/DiT-XL-2-256x256.pt"
@@ -401,54 +402,28 @@ class DAttentionWithDiffUsingNet(nn.Module):
     def Diffusion_reembed_shareWeights(self,x): #实现思路：用abmil来合成一个当作输入diffusion的特征，然后生成特征当锚点
         
         A = self.attention(x)
-
-        x = x.squeeze() #(n,1024)
-        
-        A = torch.transpose(A, -1, -2)  # KxN
-        A = F.softmax(A, dim=-1)  # softmax over N
-        A = torch.matmul(A,x)
-        diffusion = create_diffusion(str(self.t_steps))
-
-        A = A.view(1, 32, 32)
-        A = A.unsqueeze(1)
-        A = A.repeat(1, 4, 1, 1)
-        z = torch.randn(1, 4, 32, 32, device=A.device) #shz 4.26
-        print(z)
-        A = A+z
-        # print(A.shape)
-        # print("**")
-        samples = diffusion.p_sample_loop(
-        self.Dit.forward_unconditional_for_wsi2,A.shape,A,clip_denoised=False, progress=True,device=A.device)
-        new_shape = (1, 4, 1024)
-        samples=samples.view(new_shape)
-        samples = samples.mean(dim=1) #(1,1024)
-        return samples
+        return A
     
 
     @torch.no_grad()
-    def Diffusion_reembed_ChoseScoreMax(self,x): #实现思路：用abmil的head来对特征打分，选择得分最高的特征当锚点
-        if self.ifEma==0:
-            A = self.attention(x)
-        else:
-            print("UsingEma,但是呢,我不知道ema怎么实现,这就很糟糕")
-
-        x = x.squeeze() #(n,1024)
-        
+    def Diffusion_reembed_ChoseScoreMax(self,x): #实现思路：用abmil的head来对特征打分，选择得分最高的特征当初始输入
+        x_ori = x.squeeze() #(n,1024)
+        x = self.embedding(x) # n,512
+        A = self.attention(x)
         A = torch.transpose(A, -1, -2)  # KxN
         attentionScore = F.softmax(A, dim=-1)  # softmax over N
         ascore=attentionScore.squeeze(0)
         ascore=ascore.squeeze(0) # n
-        A = torch.matmul(attentionScore,x) 
         scores = self.head(x) # n,2
-        A = self.choseInstanceByValue(x,ascore,scores,self.ifType)
-        A = A.view(1, 32, 32)
-        A=A.unsqueeze(1)
-        A=A.repeat(1, 4, 1, 1)
+        chose = self.choseInstanceByValue(x_ori,ascore,scores,self.ifType)
+        chose = chose.view(1, 32, 32)
+        chose=chose.unsqueeze(1)
+        chose=chose.repeat(1, 4, 1, 1)
         z = torch.randn(1, 4, 32, 32, device=A.device) #shz 4.26
-        A=A+z #shz 4.26
+        final=chose+z #shz 4.26
         diffusion = create_diffusion(str(self.t_steps))
         samples = diffusion.p_sample_loop(
-        self.Dit.forward_unconditional_for_wsi2,A.shape,A,clip_denoised=False, progress=True,device=A.device)
+        self.Dit.forward_unconditional_for_wsi2,final.shape,final,clip_denoised=False, progress=True,device=A.device)
         new_shape = (1, 4, 1024)
         samples=samples.view(new_shape)
         samples = samples.mean(dim=1) #(1,1024)
@@ -460,8 +435,6 @@ class DAttentionWithDiffUsingNet(nn.Module):
             if self.ifrand == 0:
                 #a = self.Diffusion_reembed_shareWeights(x)
                 a =self.Diffusion_reembed_ChoseScoreMax(x)
-            else:
-                print("Something Wrong")
             x = x.squeeze()
             b = x
             cosine_similarity = F.cosine_similarity(a.expand_as(b), b, dim=1)
@@ -474,6 +447,7 @@ class DAttentionWithDiffUsingNet(nn.Module):
             # boundary_similarity = cosine_similarity[sorted_indices[num_elements]]
             x = result.view(-1, 1024)
             # b,p,n = x.size()
+            x = self.embedding(x)
             A = self.attention(x)
             A = torch.transpose(A, -1, -2)  # KxN
             A = F.softmax(A, dim=-1)  # softmax over N
@@ -482,26 +456,7 @@ class DAttentionWithDiffUsingNet(nn.Module):
         else:
             if self.ifTrain == 1:
                 # b,p,n = x.size()
-                A = self.attention(x)
-                A = torch.transpose(A, -1, -2)  # KxN
-                A = F.softmax(A, dim=-1)  # softmax over N
-                x = torch.matmul(A,x)
-                x = self.head(x.squeeze(1))
-            else:
-                if self.ifrand == 0:
-                    a = self.Diffusion_reembed_ChoseScoreMax(x)
-                else:
-                    print("Wrong")       
-                x = x.squeeze()
-                b = x
-                cosine_similarity = F.cosine_similarity(a.expand_as(b), b, dim=1)
-                sorted_indices = torch.argsort(cosine_similarity, dim=0)
-                k = self.k_ratio
-                num_elements = int(torch.tensor(b.size(0)) * k)
-                lowest_k_indices = sorted_indices[:num_elements]
-                result = b[lowest_k_indices]
-                x = result.view(-1, 1024)
-                # b,p,n = x.size()
+                x = self.embedding(x)
                 A = self.attention(x)
                 A = torch.transpose(A, -1, -2)  # KxN
                 A = F.softmax(A, dim=-1)  # softmax over N
