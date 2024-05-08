@@ -152,11 +152,14 @@ class DAttentionWithDiff(nn.Module):
         tsne = TSNE(n_components=2, perplexity=30, learning_rate=200, random_state=0)
         data_tsne = tsne.fit_transform(data)
         plt.figure(figsize=(10, 5))
-        plt.scatter(data_tsne[:-1, 0], data_tsne[:-1, 1], c='blue', label='A Data',s=1)
-        plt.scatter(data_tsne[-1, 0], data_tsne[-1, 1], c='red', label='B Data', s=1)
+        # plt.scatter(data_tsne[:-1, 0], data_tsne[:-1, 1], c='blue', label='A Data',s=1)
+        # plt.scatter(data_tsne[-1, 0], data_tsne[-1, 1], c='red', label='B Data', s=1)
+        plt.scatter(data_tsne[:-200, 0], data_tsne[:-200, 1], c='blue', label='A Data',s=1)
+        plt.scatter(data_tsne[-200:, 0], data_tsne[-200:, 1], c='red', label='B Data', s=1)
         plt.legend()
         plt.title('t-SNE Visualization')
-        output_path = '/nas/zhangxiaoxian/output/mil_shz/tsne_random/tsne_visualization_{}.png'.format(random_number)
+        output_path = '/nas/zhangxiaoxian/output/mil_shz/tsne_50/tsne_visualization_{}.png'.format(random_number)
+        output_path = '/data/shihuazhan/output_wsi/tsne_200/tsne_visualization_{}.png'.format(random_number)
         plt.savefig(output_path)
         print("Image saved to {}".format(output_path))
         
@@ -205,7 +208,18 @@ class DAttentionWithDiff(nn.Module):
                 a = self.average_reembed(x)
             x = x.squeeze()
             tsnex= x.squeeze()
-            #random=self.drawTsne(tsnex,a)
+            """
+            此处为tsne画图
+            """
+            results = []
+            for _ in range(200):
+                aa = self.Diffusion_reembed(x)
+                results.append(aa)
+            b = torch.stack(results, dim=0)
+            nothing=self.drawTsne(tsnex,b)
+            """
+            此处为tsne画图
+            """
             b = x
             cosine_similarity = F.cosine_similarity(a.expand_as(b), b, dim=1)
             sorted_indices = torch.argsort(cosine_similarity, dim=0) #low
@@ -368,6 +382,29 @@ class DAttentionWithDiffchose(nn.Module):
     # def updateEma(self,a):
     #     self.attention_ema -= (1 - a) * (self.attention_ema - self.attention.weight.data)
 
+    def drawTsne(self,a,b):
+        a = a.cpu().numpy()
+        b = b.cpu().numpy()
+        random_number = random.randint(1, 20000)
+        plt.title('t-SNE Visualization ({})'.format(random_number))
+        b = b.reshape(-1, 1024)
+        data = np.vstack((a, b))
+        tsne = TSNE(n_components=2, perplexity=30, learning_rate=200, random_state=0)
+        data_tsne = tsne.fit_transform(data)
+        plt.figure(figsize=(10, 5))
+        # plt.scatter(data_tsne[:-1, 0], data_tsne[:-1, 1], c='blue', label='A Data',s=1)
+        # plt.scatter(data_tsne[-1, 0], data_tsne[-1, 1], c='red', label='B Data', s=1)
+        plt.scatter(data_tsne[:-200, 0], data_tsne[:-200, 1], c='blue', label='A Data',s=1)
+        plt.scatter(data_tsne[-200:, 0], data_tsne[-200:, 1], c='red', label='B Data', s=1)
+        plt.legend()
+        plt.title('t-SNE Visualization')
+        output_path = '/nas/zhangxiaoxian/output/mil_shz/tsne_50/tsne_visualization_{}.png'.format(random_number)
+        output_path = '/data/shihuazhan/output_wsi/tsne_200_diffchose/tsne_visualization_{}.png'.format(random_number)
+        plt.savefig(output_path)
+        print("Image saved to {}".format(output_path))
+        
+        return random_number
+
     def choseInstanceByValue(self,x,attention,score,value):
         
         if value==1: #max attention
@@ -436,6 +473,19 @@ class DAttentionWithDiffchose(nn.Module):
                 #a = self.Diffusion_reembed_shareWeights(x)
                 a =self.Diffusion_reembed_ChoseScoreMax(x)
             x = x.squeeze()
+            tsnex= x.squeeze()
+            """
+            此处为tsne画图
+            """
+            results = []
+            for _ in range(200):
+                aa = self.Diffusion_reembed_ChoseScoreMax(x)
+                results.append(aa)
+            b = torch.stack(results, dim=0)
+            nothing=self.drawTsne(tsnex,b)
+            """
+            此处为tsne画图
+            """
             b = x
             cosine_similarity = F.cosine_similarity(a.expand_as(b), b, dim=1)
             sorted_indices = torch.argsort(cosine_similarity, dim=0) #low
