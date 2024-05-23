@@ -7,7 +7,7 @@ import torch.nn as nn
 from dataloader import *
 from torch.utils.data import DataLoader, RandomSampler
 import argparse, os
-from modules import attmil,clam,mhim,dsmil,transmil,mean_max,diffmil
+from modules import attmil,clam,mhim,dsmil,transmil,mean_max,diffmil,diffusionnet
 from torch.nn.functional import one_hot
 from torch.cuda.amp import GradScaler
 from contextlib import suppress
@@ -169,11 +169,13 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
 
         model = mhim.MHIM(**model_params).to(device)
     elif args.model == 'diff':
-        model = diffmil.DAttentionWithDiff(out_dim=args.n_classes,k_ratio=args.k_ratio,t_steps=args.t_steps,ifrand=args.ifrand,ifTrain=args.ifTrain).to(device) 
+        model = diffmil.DAttentionWithDiff(out_dim=args.n_classes,k_ratio=args.k_ratio,t_steps=args.t_steps,ifrand=args.ifrand,ifTrain=args.ifTrain).to(device)
+    elif args.model == 'diffusionnet':
+        model = diffusionnet.DiffusionNet(out_dim=args.n_classes,t=args.t_steps).to(device) 
     elif args.model == 'random':
         model = diffmil.DAttentionWithRandomAbandon(out_dim=args.n_classes,k_ratio=args.k_ratio,t_steps=args.t_steps,ifrand=args.ifrand,ifTrain=args.ifTrain).to(device)           
     elif args.model == 'chose':
-        model = diffmil. DAttentionWithDiffchose(out_dim=args.n_classes,k_ratio=args.k_ratio,t_steps=args.t_steps,ifrand=args.ifrand,ifTrain=args.ifTrain,ifType=args.ifType).to(device)           
+        model = diffmil. DAttentionWithDiffchose(out_dim=args.n_classes,k_ratio=args.k_ratio,t_steps=args.t_steps,ifrand=args.ifrand,ifTrain=args.ifTrain,ifType=args.ifType,ifClose=args.ifClose).to(device)           
     elif args.model == 'pure':
         model = mhim.MHIM(select_mask=False,n_classes=args.n_classes,act=args.act,head=args.n_heads,da_act=args.da_act,baseline=args.baseline).to(device)
     elif args.model == 'attmil':
@@ -757,7 +759,7 @@ if __name__ == '__main__':
     parser.add_argument('--best_thr_val', action='store_true', help='Cal the best thr with val set in the test phase. Thanks Weiyi Wu!')
 
     # Model
-    # diffusion
+    # diffusion shz
     parser.add_argument('--ifType', default=1, type=int, help='to chose the method of chosing arch')
     parser.add_argument('--k_ratio', default=0.1, type=float, help='Number of total k ratio')
     parser.add_argument('--t_steps', default=2, type=int, help='t in diffusion model')
@@ -765,6 +767,7 @@ if __name__ == '__main__':
     parser.add_argument('--ifrand', default=0, type=int, help='if 0 means using diff,1 means using rand')
     parser.add_argument('--temp_nums', default=100, type=int, help='the numbers of templates made by diffusion model')
     parser.add_argument('--ifEma', default=0, type=int, help='if 0 means no Ema in the sharing weights')
+    parser.add_argument('--ifClose', default=0, type=int, help='if 0 means far, if 1 means near')
 
     # Other models
     parser.add_argument('--ds_average', action='store_true', help='DSMIL hyperparameter')

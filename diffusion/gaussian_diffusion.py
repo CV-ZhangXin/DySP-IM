@@ -283,6 +283,7 @@ class GaussianDiffusion:
             extra = None
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
+            model_output = model_output.view(B, C * 2, *x.shape[2:]) #shz
             assert model_output.shape == (B, C * 2, *x.shape[2:])
             model_output, model_var_values = th.split(model_output, C, dim=1)
             min_log = _extract_into_tensor(self.posterior_log_variance_clipped, t, x.shape)
@@ -488,6 +489,7 @@ class GaussianDiffusion:
         else:
             img = th.randn(*shape, device=device)
         indices = list(range(self.num_timesteps))[::-1] #获取扩散过程的时间步，并反转列表，以便从最后一个时间步开始迭代。
+        
 
         if progress:
             # Lazy import so that we don't depend on tqdm.

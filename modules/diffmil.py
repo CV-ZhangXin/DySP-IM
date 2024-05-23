@@ -350,7 +350,7 @@ class DAttentionWithRandomAbandon(nn.Module): #这个是跑对比试验用的，
         return x
     
 class DAttentionWithDiffchose(nn.Module):
-    def __init__(self,out_dim=2,k_ratio=0.1,t_steps=2,n_robust=0,ifTrain=1,ifrand=0,ifEma=0,ifType=1):
+    def __init__(self,out_dim=2,k_ratio=0.1,t_steps=2,n_robust=0,ifTrain=1,ifrand=0,ifEma=0,ifType=1,ifClose=0):
         super(DAttentionWithDiffchose, self).__init__()
         self.embedding = FCLayer()
         self.L = 512
@@ -362,6 +362,7 @@ class DAttentionWithDiffchose(nn.Module):
         self.ifrand = ifrand
         self.ifEma = ifEma
         self.ifType= ifType
+        self.ifClose = ifClose
         
         self.attention = nn.Sequential(
             nn.Linear(self.L, self.D,bias=False),
@@ -404,6 +405,7 @@ class DAttentionWithDiffchose(nn.Module):
         print("Image saved to {}".format(output_path))
         
         return random_number
+
 
     def choseInstanceByValue(self,x,attention,score,value):
         
@@ -477,19 +479,21 @@ class DAttentionWithDiffchose(nn.Module):
             """
             此处为tsne画图
             """
-            results = []
-            for _ in range(200):
-                aa = self.Diffusion_reembed_ChoseScoreMax(x)
-                results.append(aa)
-            b = torch.stack(results, dim=0)
-            nothing=self.drawTsne(tsnex,b)
+            # results = []
+            # for _ in range(200):
+            #     aa = self.Diffusion_reembed_ChoseScoreMax(x)
+            #     results.append(aa)
+            # b = torch.stack(results, dim=0)
+            # nothing=self.drawTsne(tsnex,b)
             """
             此处为tsne画图
             """
             b = x
             cosine_similarity = F.cosine_similarity(a.expand_as(b), b, dim=1)
-            sorted_indices = torch.argsort(cosine_similarity, dim=0) #low
-            # sorted_indices = torch.argsort(cosine_similarity, dim=0, descending=True)  #high
+            if self.ifClose == 0:
+                sorted_indices = torch.argsort(cosine_similarity, dim=0) #low
+            else:
+                sorted_indices = torch.argsort(cosine_similarity, dim=0, descending=True)  #high
             k = self.k_ratio
             num_elements = int(torch.tensor(b.size(0)) * k)
             lowest_k_indices = sorted_indices[:num_elements]
