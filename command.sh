@@ -1,10 +1,12 @@
-# diff 0.4 call
-CUDA_VISIBLE_DEVICES=0 python3 main.py --project=mil_shz --datasets=camelyon16 --dataset_root=/data2/zhangxiaoxian/camelyon_all/r50_bioseg/ --model_path=/data/shihuazhan/output_wsi/ --cv_fold=3 --title=abmil_diff0.4_twh_call_2023 --model=diff --seed=2023 --k_ratio=0.4 --t_steps=2 --ifTrain=1 --ifrand=0 --wandb;
-# baseline call
-CUDA_VISIBLE_DEVICES=1 python3 main.py --project=mil_shz --datasets=camelyon16 --dataset_root=/data2/zhangxiaoxian/camelyon_all/r50_bioseg/  -model_path=/data/shihuazhan/output_wsi/ --cv_fold=3 --title=abmil_twh_call_baseline --model=attmil --seed=2021 --wandb;
-# random 0.4 call
-CUDA_VISIBLE_DEVICES=1 python3 main.py --project=mil_shz --datasets=camelyon16 --dataset_root=/data2/zhangxiaoxian/camelyon_all/r50_bioseg/ --model_path=/data/shihuazhan/output_wsi/ --model=random  --k_ratio=0.4 --t_steps=2 --ifTrain=1 --ifrand=0 --cv_fold=3 --seed=2021 --title=ab_mil_random_drop_k_0.4_twh_c_all --wandb;
-# with noise call
-CUDA_VISIBLE_DEVICES=1 python3 main.py --project=mil_shz --datasets=camelyon16 --dataset_root=/data2/zhangxiaoxian/camelyon_all/r50_bioseg/ --model_path=/nas/zhangxiaoxian/output/mil_shz/ --model=attentionDiffSharing --k_ratio=0.4 --t_steps=2 --ifTrain=1 --ifrand=0 --cv_fold=5 --seed=2021 --title=ab_mil_diff_k_0.2_differentTrainAndTest_tcga_5folds_chose3low_withnoise --ifType=3 --wandb
-# with noise tcga
-CUDA_VISIBLE_DEVICES=1 python3 main.py --project=mil_shz --datasets=tcga --dataset_root=/nas/zhangxiaoxian/tcga/zft --model=attentionDiffSharing --model_path=/nas/zhangxiaoxian/output/mil_shz/ --num_classes=2 --k_ratio=0.2 --t_steps=2 --ifTrain=1 --ifrand=0 --cv_fold=5 --weight_decay=1e-5 --lr=2e-4 --opt=adam --lr_sche=cosine --num_workers=2 --seed=2021 --title=ab_mil_diff_k_0.2_differentTrainAndTest_tcga_5folds_chose3low_withnoise --persistence --ifEma=0 --ifType=3 --wandb
+# # diff 0.4 call
+# CUDA_VISIBLE_DEVICES=0 python3 main.py --project=mil_shz --datasets=camelyon16 --dataset_root=/data2/zhangxiaoxian/camelyon_all/r50_bioseg/ --model_path=/data/shihuazhan/output_wsi/ --cv_fold=3 --title=abmil_diff0.4_twh_call_2023 --model=diff --seed=2023 --k_ratio=0.4 --t_steps=2 --ifTrain=1 --ifrand=0 --wandb;
+# # baseline call
+# CUDA_VISIBLE_DEVICES=1 python3 main.py --project=mil_shz --datasets=camelyon16 --dataset_root=/data2/zhangxiaoxian/camelyon_all/r50_bioseg/  -model_path=/data/shihuazhan/output_wsi/ --cv_fold=3 --title=abmil_twh_call_baseline --model=attmil --seed=2021 --wandb;
+# # random 0.4 call
+# CUDA_VISIBLE_DEVICES=1 python3 main.py --project=mil_shz --datasets=camelyon16 --dataset_root=/data2/zhangxiaoxian/camelyon_all/r50_bioseg/ --model_path=/data/shihuazhan/output_wsi/ --model=random  --k_ratio=0.4 --t_steps=2 --ifTrain=1 --ifrand=0 --cv_fold=3 --seed=2021 --title=ab_mil_random_drop_k_0.4_twh_c_all --wandb;
+# # with noise call
+# CUDA_VISIBLE_DEVICES=1 python3 main.py --project=mil_shz --datasets=camelyon16 --dataset_root=/data2/zhangxiaoxian/camelyon_all/r50_bioseg/ --model_path=/nas/zhangxiaoxian/output/mil_shz/ --model=attentionDiffSharing --k_ratio=0.4 --t_steps=2 --ifTrain=1 --ifrand=0 --cv_fold=5 --seed=2021 --title=ab_mil_diff_k_0.2_differentTrainAndTest_tcga_5folds_chose3low_withnoise --ifType=3 --wandb
+# # with noise tcga
+# CUDA_VISIBLE_DEVICES=1 python3 main.py --project=mil_shz --datasets=tcga --dataset_root=/nas/zhangxiaoxian/tcga/zft --model=attentionDiffSharing --model_path=/nas/zhangxiaoxian/output/mil_shz/ --num_classes=2 --k_ratio=0.2 --t_steps=2 --ifTrain=1 --ifrand=0 --cv_fold=5 --weight_decay=1e-5 --lr=2e-4 --opt=adam --lr_sche=cosine --num_workers=2 --seed=2021 --title=ab_mil_diff_k_0.2_differentTrainAndTest_tcga_5folds_chose3low_withnoise --persistence --ifEma=0 --ifType=3 --wandb
+CUDA_VISIBLE_DEVICES=1 python3 main.py --project=mil_shz --datasets=tcga --dataset_root=/data2/zhangxiaoxian/tcga/zft/  --model_path=/data/shihuazhan/output_wsi/ --cv_fold=5 --title=againDiff_twh_tcga0.2_5folds_different --model=diff --seed=2021 --k_ratio=0.2 --t_steps=2 --ifTrain=1 --ifrand=0 --wandb;
+CUDA_VISIBLE_DEVICES=1 python3 main.py --project=mil_shz --datasets=tcga --dataset_root=/data2/zhangxiaoxian/tcga/zft/  --model_path=/data/shihuazhan/output_wsi/ --cv_fold=5 --title=againDiff_twh_tcga0.2_5folds_same --model=diff --seed=2021 --k_ratio=0.2 --t_steps=2 --ifTrain=0 --ifrand=0 --wandb;

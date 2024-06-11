@@ -7,7 +7,8 @@ import torch.nn as nn
 from dataloader import *
 from torch.utils.data import DataLoader, RandomSampler
 import argparse, os
-from modules import attmil,clam,mhim,dsmil,transmil,mean_max,diffmil,diffusionnet
+from modules import attmil,clam,mhim,dsmil,transmil,mean_max,diffmil
+from modules import diffusionnet as diffusionnet
 from torch.nn.functional import one_hot
 from torch.cuda.amp import GradScaler
 from contextlib import suppress
@@ -170,6 +171,8 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
         model = mhim.MHIM(**model_params).to(device)
     elif args.model == 'diff':
         model = diffmil.DAttentionWithDiff(out_dim=args.n_classes,k_ratio=args.k_ratio,t_steps=args.t_steps,ifrand=args.ifrand,ifTrain=args.ifTrain).to(device)
+    elif args.model == 'difftune':
+        model = diffmil.DAttentionWithDiffTune(out_dim=args.n_classes,k_ratio=args.k_ratio,t_steps=args.t_steps,ifrand=args.ifrand,ifTrain=args.ifTrain).to(device)
     elif args.model == 'diffusionnet':
         model = diffusionnet.DiffusionNet(out_dim=args.n_classes,t=args.t_steps).to(device) 
     elif args.model == 'random':
@@ -532,16 +535,24 @@ def train_loop(args,model,model_tea,loader,optimizer,device,amp_autocast,criteri
             elif args.model in ('clam_sb','clam_mb','dsmil'):
                 train_logits,cls_loss,patch_num = model(bag,label,criterion)
                 keep_num = patch_num
+            elif args.model== 'diffusionnet': #shz
+                train_logits = model(bag)
+                cls_loss,patch_num,keep_num = 0.,0.,0.
+                
+                
+
             else:
                 train_logits = model(bag)
                 cls_loss,patch_num,keep_num = 0.,0.,0.
 
             if args.loss == 'ce':
                 logit_loss = criterion(train_logits.view(batch_size,-1),label)
+                
             elif args.loss == 'bce':
                 logit_loss = criterion(train_logits.view(batch_size,-1),one_hot(label.view(batch_size,-1).float(),num_classes=2))
 
-        train_loss = args.cls_alpha * logit_loss +  cls_loss*args.cl_alpha
+        #train_loss = args.cls_alpha * logit_loss +  cls_loss*args.cl_alpha
+        train_loss = args.cls_alpha * logit_loss +  cls_loss * 1   #shz
 
         train_loss = train_loss / args.accumulation_steps
         if args.clip_grad > 0.:
@@ -566,7 +577,16 @@ def train_loop(args,model,model_tea,loader,optimizer,device,amp_autocast,criteri
                         ema_update(model,model_tea,mm)
             else:
                 mm = 0.
-
+        # # for name, parms in model.named_parameters():
+        # #     print('-->name:', name, '-->grad_requirs:', parms.requires_grad, '--weight', torch.mean(parms.data), ' -->grad_value:', torch.mean(parms.grad))
+        # for name, parms in model.named_parameters():
+        #     if parms.grad is not None:
+        #         #print('-->name:', name, '-->grad_requirs:', parms.requires_grad, '--weight', torch.mean(parms.data), ' -->grad_value:', torch.mean(parms.grad))
+        #         a=1
+        #     else:
+        #         print('-->name:', name, '-->grad_requirs:', parms.requires_grad, '--weight', torch.mean(parms.data), ' -->grad_value:', "No Gradient")
+        # # print(model)
+        # print("__________________________*****___________________________________*******__________________") #shz
         loss_cls_meter.update(logit_loss,1)
         loss_cl_meter.update(cls_loss,1)
         patch_num_meter.update(patch_num,1)
@@ -585,7 +605,7 @@ def train_loop(args,model,model_tea,loader,optimizer,device,amp_autocast,criteri
                 ('mm',mm_meter.avg),
             ])
             if not args.no_log:
-                print('[{}/{}] logit_loss:{}, cls_loss:{},  patch_num:{}, keep_num:{} '.format(i,len(loader)-1,loss_cls_meter.avg,loss_cl_meter.avg,patch_num_meter.avg, keep_num_meter.avg))
+                print('[{}/{}] logit_loss:{}, cls_loss:{},patch_num:{}, keep_num:{} '.format(i,len(loader)-1,loss_cls_meter.avg,loss_cl_meter.avg,patch_num_meter.avg, keep_num_meter.avg))
             rowd = OrderedDict([ (str(k)+'-fold/'+_k,_v) for _k, _v in rowd.items()])
             if args.wandb:
                 wandb.log(rowd)

@@ -9,7 +9,7 @@
 # MAE: https://github.com/facebookresearch/mae/blob/main/models_mae.py
 # --------------------------------------------------------
 
-
+from download import find_model
 import torch.nn.functional as F
 from diffusion import create_diffusion
 from inspect import isfunction
@@ -19,7 +19,7 @@ import torch.nn as nn
 import numpy as np
 import math
 from timm.models.vision_transformer import PatchEmbed, Attention, Mlp
-
+from models import DiT_models
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 class FCLayer(nn.Module):
@@ -134,7 +134,7 @@ class LabelEmbedder(nn.Module):
 #                                 Core DiT Model                                #
 #################################################################################
 
-class DiTBlock(nn.Module):
+class DiT2Block(nn.Module):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
@@ -179,7 +179,7 @@ class FinalLayer(nn.Module):
         return x
 
 
-class DiT(nn.Module):
+class DiT2(nn.Module):
     """
     Diffusion model with a Transformer backbone.
     """
@@ -211,7 +211,7 @@ class DiT(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, hidden_size), requires_grad=False)
 
         self.blocks = nn.ModuleList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+            DiT2Block(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
         self.initialize_weights() #shz
@@ -274,9 +274,9 @@ class DiT(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N,) tensor of class labels
         """
-        # print(x.shape)
         
-        x=x.view(x.size(1), x.size(0), 32, 32) #shz
+        
+        x=x.view(x.size(0),-1, 32, 32) #shz
         # x=x.view(x.size(0), x.size(1), 32, 32) #shz
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(t)                   # (N, D)
@@ -394,7 +394,7 @@ class MILNet(nn.Module):
         self.norm_final = nn.LayerNorm(1024, elementwise_affine=False, eps=1e-6)
         
         
-        self.denoiser = DiT(depth=1, hidden_size=768, patch_size=2, num_heads=2) #shz Dit
+        self.denoiser = DiT2(depth=1, hidden_size=384, patch_size=4, num_heads=2) #shz Dit
         self.diffusion = create_diffusion(str(num_timesteps))
         
       
@@ -410,28 +410,37 @@ class MILNet(nn.Module):
         x = condition_feature    
         latent_shape = x.shape
         x_start = inter_feas * self.signal_scaling_rate #batch['mask_'+task]
-        if self.training:
-            noise = default(None, lambda: torch.randn_like(x_start))
-        else:
-            save_path = '/home/shihuazhan/shz_mil/newWsi/save/tensor.pth'
-            noise = torch.load(save_path)
+        noise = default(None, lambda: torch.randn_like(x_start))
         t = torch.ones(x.shape[0], device=x.device).long() * (self.num_timesteps - 1)
         _x_noisy = self.diffusion.q_sample(x_start=x_start, t=t, noise=noise)
         noisy_masks = _x_noisy
         model_kwargs={'y':condition_feature}
         denoisy_masks=self.diffusion.p_sample_loop(self.denoiser.forward, noisy_masks.shape,noisy_masks, clip_denoised=False,progress=False,model_kwargs=model_kwargs,device=noisy_masks.device)
         #denoisy_masks=self.diffusion.p_sample_loop(self.denoiser.forward, noisy_masks.shape, noisy_masks, clip_denoised=False,progress=False,device=noisy_masks.device)
-       
         denoisy_masks=self.norm_final(denoisy_masks.view(1,-1))
         mean = x_start.mean()
         std = x_start.std()
-
         preds=self.head(denoisy_masks.squeeze(1)+inter_feas.squeeze(1))
-
- 
         return preds
 
-
+    def Diff(self, inter_feas,condition_feature):
+        x = condition_feature    
+        latent_shape = x.shape
+        x_start = inter_feas * self.signal_scaling_rate #batch['mask_'+task]
+        noise = default(None, lambda: torch.randn_like(x_start))
+        t = torch.ones(x.shape[0], device=x.device).long() * (self.num_timesteps - 1)
+        _x_noisy = self.diffusion.q_sample(x_start=x_start, t=t, noise=noise)
+        noisy_masks = _x_noisy
+        model_kwargs={'y':condition_feature}
+        denoisy_masks=self.diffusion.p_sample_loop(self.denoiser.forward, noisy_masks.shape,noisy_masks, clip_denoised=False,progress=False,model_kwargs=model_kwargs,device=noisy_masks.device)
+        #denoisy_masks=self.diffusion.p_sample_loop(self.denoiser.forward, noisy_masks.shape, noisy_masks, clip_denoised=False,progress=False,device=noisy_masks.device)
+        denoisy_masks=self.norm_final(denoisy_masks.view(denoisy_masks.size(0),-1))
+        denoisy_masks=inter_feas + 0.5 * denoisy_masks
+       
+        mean = x_start.mean()
+        std = x_start.std()
+        
+        return denoisy_masks
 
 class DiffusionNet(nn.Module):
     def __init__(self,out_dim=2,n_robust=0,t=2):
@@ -449,59 +458,59 @@ class DiffusionNet(nn.Module):
         )
         
         self.diffusion_model = MILNet(2)
+        self.Dit= DiT_models["DiT-XL/2"](input_size=32)
+        ckpt_path = "/home/shihuazhan/DiT/DiT/pretrained_models/DiT-XL-2-256x256.pt"
+        state_dict = find_model(ckpt_path)
+        self.Dit.load_state_dict(state_dict)
+        self.Dit.eval()
 
-    def p_losses(self,x):
-        x = self.embedding1024(x)
-        A = self.attention1024(x)
-        A = torch.transpose(A, -1, -2)  # KxN
-        A = F.softmax(A, dim=-1)  # softmax over N
-        x1 = torch.matmul(A,x)
+    @torch.no_grad()
+    def Diffusion_reembed(self,x): #实现思路：随机取一个当作输入diffusion的特征，然后生成特征当锚点
+        output_channels = 4
+        # 实例维度转换
+        x = x.squeeze() #(n,1024)
+        n = x.size(0)
+        diffusion = create_diffusion(str(2))
+        x = x.view(n, 32, 32)
+        random_index = torch.randint(0, x.size(0), (1,)) #另一种取法
+        x_pooled = x[random_index].unsqueeze(0)    #另一种取法
+        x_pooled = x_pooled.repeat(1, 4, 1, 1)
+        # samples = diffusion.p_sample_loop(
+        # self.Dit.forward_unconditional_for_wsi2,x_pooled.shape,x_pooled,clip_denoised=False, progress=True,device=x_pooled.device) #随机特征
+        samples = diffusion.p_sample_loop(
+        self.Dit.forward_unconditional_for_wsi2,shape=x_pooled.shape,clip_denoised=False, progress=True,device=x_pooled.device)
+        new_shape = (1, 4, 1024)
+        samples=samples.view(new_shape)
+        samples = samples.mean(dim=1) #(1,1024)
+        return samples
+    
+
+
+    
+    def forward(self,x):
         
-        condition=self.diffusion_model.head(x1.squeeze(1))
-        loss=self.diffusion_model.p_losses(x1,condition)
-        print(loss)
-        return loss
+        xx_anchor = self.embedding1024(x)
+        A_anchor = self.attention1024(xx_anchor)
+        A_anchor = torch.transpose(A_anchor, -1, -2)
+        A_anchor = F.softmax(A_anchor, dim=-1)
+        xxx_anchor= torch.matmul(A_anchor,xx_anchor)
+        conditions=self.diffusion_model.head(xxx_anchor.squeeze(1))
 
-    def cls_hloss(self,x):  #cls_hloss
-        # A = self.attention1024(x)
-        # A = torch.transpose(A, -1, -2)  # KxN
-        # A = F.softmax(A, dim=-1)  # softmax over N
-        # x1 = torch.matmul(A,x)
-        # condition=self.condition_head(x1.squeeze(1))
-        x = self.embedding1024(x)
-        A = self.attention1024(x)
-        A = torch.transpose(A, -1, -2)  # KxN
-        A = F.softmax(A, dim=-1)  # softmax over N
-        x1 = torch.matmul(A,x)
+        anchor = self.Diffusion_reembed(x)
+        b = x.squeeze()
+        cosine_similarity = F.cosine_similarity(anchor.expand_as(b), b, dim=1)
+        sorted_indices = torch.argsort(cosine_similarity, dim=0) #low
+        num_elements = int(torch.tensor(b.size(0)) * 0.1)
+        k_indices = sorted_indices[:num_elements]
+        result = (b[k_indices]).view(-1, 1024)
+
+        x_diff= self.embedding1024(result)
+        x_diff=self.diffusion_model.Diff(x_diff,conditions)
         
-        condition=self.diffusion_model.head(x1.squeeze(1))
-        return condition
+        A_diff = self.attention1024(x_diff)
+        A_diff = torch.transpose(A_diff, -1, -2)
+        A_diff = F.softmax(A_diff, dim=-1)
+        xxx_anchor= torch.matmul(A_diff,x_diff)
+        preds=self.diffusion_model.head(xxx_anchor.squeeze(1))
 
-    def forward(self, x): #forward
-        # # b,p,n = x.size()
-        # # x = self.embedding(x) # 1024->512
-        # A = self.attention1024(x)
-        # A = torch.transpose(A, -1, -2)  # KxN
-        # A = F.softmax(A, dim=-1)  # softmax over N
-        # x1 = torch.matmul(A,x)
-        # condition=self.condition_head(x1.squeeze(1))
-        # # print("+++++++++++++++++++++++++++++++++")
-        # # print(x1)
-        # #print(condition)
-        # preds=self.diffusion_model(x1,condition) 
-        # b,p,n = x.size()
-        x = self.embedding1024(x) # 1024->512
-        A = self.attention1024(x)
-        A = torch.transpose(A, -1, -2)  # KxN
-        A = F.softmax(A, dim=-1)  # softmax over N
-        x1 = torch.matmul(A,x)
-        #x11=self.diffusion_model.embedding(x1)
-        condition=self.diffusion_model.head(x1.squeeze(1))
-        # print("+++++++++++++++++++++++++++++++++")
-        # print(x1)
-        #print(condition)
-        preds=self.diffusion_model(x1,condition)
-        
-
- 
         return preds
