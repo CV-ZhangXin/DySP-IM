@@ -103,7 +103,7 @@ class DAttention(nn.Module):
         self.L = 512 #512
         self.D = 128 #128
         self.K = 1
-        self.feature = [nn.Linear(1024, 512)]
+        self.feature = [nn.Linear(512, 512)]
         
         if act.lower() == 'gelu':
             self.feature += [nn.GELU()]
@@ -144,6 +144,7 @@ class DAttention(nn.Module):
                 return Y_prob,A
         else:
             return Y_prob
+        
 if __name__ == "__main__":
     x=torch.rand(5,3,64,64).cuda()
     gcnnet=Resnet().cuda()

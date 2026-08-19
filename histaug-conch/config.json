@@ -1,0 +1,56 @@
+{
+  "_commit_hash": null,
+  "model_type": "histaug",
+  "architectures": [
+    "HistaugPretrainedModel"
+  ],
+  "auto_map": {
+    "AutoConfig": "configuration_histaug.HistaugConfig",
+    "AutoModel": "modeling_histaug.HistaugPretrainedModel"
+  },
+  "chunk_size": 4,
+  "depth": 16,
+  "input_dim": 512,
+  "mlp_ratio": 4,
+  "name": "histaug_model",
+  "num_heads": 8,
+  "positional_encoding_type": "learnable",
+  "transforms": {
+    "parameters": {
+      "brightness": [
+        -0.5,
+        0.5
+      ],
+      "contrast": [
+        -0.5,
+        0.5
+      ],
+      "crop": 0.75,
+      "dilation": 0.75,
+      "erosion": 0.75,
+      "gamma": [
+        -0.5,
+        0.5
+      ],
+      "gaussian_blur": 0.75,
+      "h_flip": 0.75,
+      "hed": [
+        -0.5,
+        0.5
+      ],
+      "hue": [
+        -0.5,
+        0.5
+      ],
+      "rotation": 0.75,
+      "saturation": [
+        -0.5,
+        0.5
+      ],
+      "v_flip": 0.75
+    }
+  },
+  "use_transform_pos_embeddings": true,
+  "torch_dtype": "float32",
+  "transformers_version": "4.46.0"
+}

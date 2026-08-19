@@ -1,0 +1,13 @@
+{
+    "context_templates": [
+        "This histopathology image illustrates"
+    ],
+    "class_names": {
+        "0": [
+            "glandular structures with columnar cells and mucin secretion"
+        ],
+        "1": [
+            "squamous differentiation with keratinization and intercellular bridges"
+        ]
+    }
+}

@@ -1,0 +1,16 @@
+{
+    "context_templates": [
+        "This histopathology image illustrates"
+    ],
+    "class_names": {
+        "0": [
+            "normal tissue structure"
+        ],
+        "1": [
+            "malignant tumor"
+        ],
+        "2": [
+            "tissue with nuclei, cytoplasm, and extracellular structural elements"
+        ]
+    }
+}

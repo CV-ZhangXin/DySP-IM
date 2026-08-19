@@ -253,4 +253,8 @@ class MHIM(nn.Module):
         # cl loss
         cls_loss= self.forward_loss(student_cls_feat=student_cls_feat,teacher_cls_feat=teacher_cls_feat)
 
-        return student_logit, cls_loss,ps,len_keep
+        # return student_logit, cls_loss,ps,len_keep
+        return student_logit, cls_loss,ps,len_keep,mask_ids #shz
+    
+ 
+        

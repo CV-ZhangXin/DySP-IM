@@ -1,0 +1,14 @@
+{
+    "context_templates": [
+    "This histopathology image shows"
+    ],
+    "class_names": {
+    "0": [
+    "A normal lymph node is an oval structure with a smooth border. Its internal architecture is well-preserved, featuring a distinct, lighter cortex peripherally and a darker medulla centrally. The cortex contains evenly distributed, well-formed follicles composed of densely packed, uniform small lymphocytes. The medulla shows lymphocyte cords. Thin-walled blood vessels are present throughout. No atypical cells, irregular masses, or architectural distortions are observed."
+    ],
+    "1": [
+    "A metastatic lymph node is typically enlarged and irregularly shaped with distorted architecture, leading to an effaced or lost distinction between the cortex and medulla. The key feature is the presence of large, pleomorphic cancer cells interspersed in or replacing the native lymphoid tissue. These malignant cells exhibit irregular nuclei, prominent nucleoli, and abundant cytoplasm, often forming atypical arrangements. These cells form irregular metastatic deposits, and the lymph node capsule may be thickened or breached. Other associated findings can include desmoplasia, an increased number of mitoses, and potential necrosis. The blood vessel distribution is often abnormal."
+    ]
+    }
+    }
+    

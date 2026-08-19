@@ -1,0 +1,13 @@
+{
+    "context_templates": [
+        "This histopathology image illustrates"
+    ],
+    "class_names": {
+        "0": [
+            "cancer cells aggregated in a duct-like mass"
+        ],
+        "1": [
+            "cancer cells scattered and growing in a diffuse pattern without an obvious mass"
+        ]
+    }
+}

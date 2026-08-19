@@ -1,0 +1,14 @@
+{
+    "context_templates": [
+    "This histopathology image shows"
+    ],
+    "class_names": {
+    "0": [
+    "well-organized tissue with uniform cells and clear structural boundaries"
+    ],
+    "1": [
+    "cancerous tissue with disorganized cells, irregular shapes, and invasive patterns"
+    ]
+    }
+    }
+    
